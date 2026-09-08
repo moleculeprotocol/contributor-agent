@@ -1,5 +1,5 @@
 ---
-name: molecule-lab-contributor
+name: contributor-agent
 description: Write files into a Molecule Lab that a human owns. Use when someone has made a Lab in the Molecule Labs app and wants their agent to put files in its data room — the agent creates its own wallet, they grant it the Contributor role, it issues its own token, and then it reads and writes the Lab. Uploads are either public (plaintext, anyone can download) or private (encrypted, only people with a role can open) — the human always chooses, and every upload is read back to them and confirmed before anything is written. This skill owns no Lab, creates none, and spends nothing.
 license: Apache-2.0
 ---

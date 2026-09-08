@@ -1,5 +1,5 @@
 {
-  "name": "molecule-lab-contributor-agent-marketplace",
+  "name": "contributor-agent-validation-marketplace",
   "description": "Marketplace for the Molecule Labs agent skill: operate as a Contributor inside a Lab you do not own.",
   "owner": {
     "name": "Molecule",
@@ -7,9 +7,9 @@
   },
   "plugins": [
     {
-      "name": "molecule-lab-contributor-agent",
-      "source": "./plugins/molecule-lab-contributor-agent",
-      "description": "Agent-as-Contributor lane for Molecule Labs: generate a wallet, get granted a role, issue a token, and upload files public or encrypted \u2014 with the visibility and destination confirmed by the human before anything is written.",
+      "name": "contributor-agent-validation",
+      "source": "./plugins/contributor-agent-validation",
+      "description": "Validation lane for the Contributor Agent in Molecule Labs: ensure all actions are compliant and authorized before execution.",
       "version": "0.5.0"
     }
   ]

@@ -106,12 +106,13 @@ app's **Code** tab as much as in a terminal. No terminal is needed.
 Driving it with something other than Claude — Grok, or any MCP client — is supported and
 takes about as long: see [Running it on another agent](#running-it-on-another-agent).
 
-The first session after installing spends half a minute or more setting up, with a status
-line that says so. Read the line Claude Code prints when the install finishes: `Plugin is now
-active.` means the `mol-labs` tools are there already, and `Run /reload-plugins to activate.`
-means type that once. Expect the second one on a first install — setup has to finish inside
-the 30-second window the host gives an MCP server to start, and downloading a Python and
-fifty packages usually does not. Every session after that starts instantly.
+The first session after installing sets itself up, with a status line that says so, and the
+`mol-labs` tools are normally ready in that same session. Measured on a clean machine with
+nothing pre-installed — uv, a Python and forty-nine packages all downloaded from scratch —
+setup took **7 seconds**, well inside the 30-second window the host gives an MCP server to
+start. On a slow connection it can exceed that; the tell is the line Claude Code prints when
+the install finishes. `Plugin is now active.` means the tools are there. `Run /reload-plugins
+to activate.` means type that once. Every session after that starts instantly.
 
 `/plugin install` opens the plugin's details and asks for a scope. **User** installs it for
 you everywhere and is the right answer unless you know otherwise; **Project** writes it into
@@ -221,8 +222,10 @@ are counted), fetches a Python that satisfies `requires-python`, and runs it —
 plugin's data directory. Nothing is compiled from source, so no build toolchain is needed on
 any platform.
 
-Budget about **220 MB** of disk for that directory: roughly 35 MB of uv, 50 MB of Python, and
-135 MB of package cache and built environment. Each plugin update whose `server.py` differs
+Budget about **220 MB** of disk for that directory — 216 MB measured on a fresh install: 35 MB
+of uv, 69 MB of Python, and 112 MB of package cache and built environment. Nothing is pinned,
+so the exact Python and package versions are whatever is current on the day you install; two
+installs a month apart will not match. Each plugin update whose `server.py` differs
 builds a second environment (~57 MB) beside the first, and nothing prunes the old one, so the
 directory grows with the updates you take. Deleting it is safe once the plugin is
 uninstalled — but not before, because your `.env` lives there too.

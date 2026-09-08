@@ -74,7 +74,18 @@ def log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
-class ToolError(Exception):
+# Must subclass the SDK's ToolError. MCPServer surfaces the message of a ToolError and
+# replaces every other exception with a bare "Error executing tool <name>" — so a
+# home-grown ToolError silently blanks every diagnostic this server raises. On mcp 1.x
+# FastMCP appended the message for any exception, which is why this only broke when the
+# unpinned dependency resolved to 2.x.
+try:
+    from mcp.server.mcpserver.exceptions import ToolError as _SdkToolError  # mcp >= 2
+except ImportError:  # pragma: no cover - mcp 1.x
+    from mcp.server.fastmcp.exceptions import ToolError as _SdkToolError
+
+
+class ToolError(_SdkToolError):
     """A tool error whose message is safe to show the agent and the human."""
 
 

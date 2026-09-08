@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "contributor-agent-validation",
-      "source": "./plugins/contributor-agent-validation",
+      "source": "./plugins/molecule-lab-contributor-agent",
       "description": "Validation lane for the Contributor Agent in Molecule Labs: ensure all actions are compliant and authorized before execution.",
       "version": "0.5.0"
     }

@@ -106,10 +106,16 @@ app's **Code** tab as much as in a terminal. No terminal is needed.
 Driving it with something other than Claude — Grok, or any MCP client — is supported and
 takes about as long: see [Running it on another agent](#running-it-on-another-agent).
 
-The first session after installing spends its first half-minute or so setting up, with a
-status line that says so, and the `mol-labs` tools are ready in that same session. On a slow
-connection the first attempt can time out; the agent will then tell you to type
-`/reload-plugins` once. Every session after that starts instantly.
+The first session after installing spends half a minute or more setting up, with a status
+line that says so. Read the line Claude Code prints when the install finishes: `Plugin is now
+active.` means the `mol-labs` tools are there already, and `Run /reload-plugins to activate.`
+means type that once. Expect the second one on a first install — setup has to finish inside
+the 30-second window the host gives an MCP server to start, and downloading a Python and
+fifty packages usually does not. Every session after that starts instantly.
+
+`/plugin install` opens the plugin's details and asks for a scope. **User** installs it for
+you everywhere and is the right answer unless you know otherwise; **Project** writes it into
+the repository's `.claude/settings.json` for everyone; **Local** is this repository, you only.
 
 Or from a clone:
 
@@ -119,7 +125,45 @@ claude --plugin-dir /path/to/molecule-lab-contributor-agent/plugins/molecule-lab
 ```
 
 The repository is a marketplace whose one plugin lives in `plugins/`, so `--plugin-dir`
-points at the plugin, not at the checkout root.
+points at the plugin, not at the checkout root. A `--plugin-dir` copy overrides an installed
+plugin of the same name for that session, so you can test a change without uninstalling.
+
+### Check it worked, on any host
+
+One question, and it answers itself:
+
+```
+ask your agent: run config_doctor
+```
+
+`config_doctor` is the only tool that needs no credential and no wallet, so it is the right
+first call on every host. Read three fields:
+
+| Field | What it tells you |
+|---|---|
+| `secretsFile` | The one and only `.env` this server reads and writes. Every other guess about its location is wrong. |
+| `configLoadedFrom` | Which file each variable actually came from — the fastest way to catch a stale `.env` or an inherited environment variable. |
+| `issues` / `fixes` | What is missing, in the order to fix it. |
+
+If the agent replies that it has no `mol-labs` tools, setup has not finished. On Claude Code
+type `/reload-plugins`; on Grok and Codex, start a new session. If it still has none, read
+`bootstrap.log` in the data directory `config_doctor` would have named — on Claude Code that
+is `~/.claude/plugins/data/<plugin>-<marketplace>/bootstrap.log`.
+
+### What to say first
+
+The skill drives an eight-step flow and the agent follows it; you do not have to know the
+tool names. Start it with plain words:
+
+```
+I want you to upload files into my Molecule Lab.
+My credential is mol_… and my Lab is https://labs.molecule.xyz/labs/<your-lab>
+```
+
+The agent will save the credential, create its own wallet, and then **stop** and give you an
+address. Add that address to your Lab as a **Contributor** in the Labs app, tell the agent it
+is done, and it carries on. It will not upload anything until it has read the plan back to
+you and you have answered whether the file is public or private.
 
 ### How the plugin sets itself up
 
@@ -127,7 +171,7 @@ Two pieces, and a beginner never sees either:
 
 **A `SessionStart` hook** runs `mcp/bootstrap.sh` at the start of every session. On the
 first run it does two things, both into the plugin's own persistent data directory
-(`~/.claude/plugins/data/<plugin>/`), touching nothing else on the machine:
+(`~/.claude/plugins/data/<plugin>-<marketplace>/`), touching nothing else on the machine:
 
 1. Puts a private copy of [uv](https://docs.astral.sh/uv/) there — copying the one already
    on PATH if there is one, otherwise downloading it with the official installer.
@@ -174,8 +218,14 @@ There is no `requirements.txt`, and that is deliberate — **the dependency list
 
 uv reads that block, resolves the four dependencies (about 50 packages once transitive ones
 are counted), fetches a Python that satisfies `requires-python`, and runs it — all into the
-plugin's data directory, about 130 MB in total. Nothing is compiled from source, so no build
-toolchain is needed on any platform.
+plugin's data directory. Nothing is compiled from source, so no build toolchain is needed on
+any platform.
+
+Budget about **220 MB** of disk for that directory: roughly 35 MB of uv, 50 MB of Python, and
+135 MB of package cache and built environment. Each plugin update whose `server.py` differs
+builds a second environment (~57 MB) beside the first, and nothing prunes the old one, so the
+directory grows with the updates you take. Deleting it is safe once the plugin is
+uninstalled — but not before, because your `.env` lives there too.
 
 One list, in one place, that cannot drift from the code that imports it.
 
@@ -218,7 +268,12 @@ enabled = ["molecule-lab-contributor-agent"]
 ```
 
 Grok reads the skill too, so the agent gets the same playbook and the same confirmation
-gate it has under Claude Code.
+gate it has under Claude Code. Confirm the install with `grok plugin details
+molecule-lab-contributor-agent`, which prints the component inventory and the install path,
+then check it the same way as anywhere else — ask the agent to run `config_doctor`.
+
+`grok plugin uninstall molecule-lab-contributor-agent` removes it again; `grok plugin
+marketplace remove <name>` removes the source and everything installed from it.
 
 One thing to know about the first run. Grok gives an MCP server **30 seconds** to start,
 and the first launch is the one that downloads a private Python and about fifty packages —
@@ -272,7 +327,11 @@ variables at all, which is exactly why the launcher does that for itself.
 
 One thing Codex will not do for you: its `SessionStart` hook does not fire under
 `codex exec`, so the first run bootstraps inside the server's own startup instead of ahead
-of it. That first start is slow; later ones are not.
+of it. That first start is slow; later ones are not. Give it one session to settle, start a
+second, and ask the agent to run `config_doctor`.
+
+`codex mcp list` shows the server, `codex mcp remove mol-labs` takes it out again, and
+`codex plugin remove molecule-lab-contributor-agent` removes the plugin and its skill.
 
 ### Any other MCP client
 
@@ -325,9 +384,12 @@ clone, or under a host that passes no plugin
 variables, the launcher points it at `plugins/molecule-lab-contributor-agent/.plugin-data/.env`
 instead.
 
-It is created at mode 0600 and is gitignored. **Do not put a `.env` at the root of the
-checkout** — nothing reads it there once the plugin is installed, and it will look like the
-credential simply stopped working. To fill one in by hand, copy
+It is created at mode 0600 and is gitignored. **Do not keep a second `.env` anywhere near
+the checkout.** The server does read one there — it searches the data directory, the plugin
+folder, the directory the host was started in, and every parent of all three — but the first
+file to define a key wins and the agent's own writes always go to `secretsFile`. A stale copy
+therefore keeps supplying an old credential while your edits to the real file appear to do
+nothing. To fill one in by hand, copy
 `plugins/molecule-lab-contributor-agent/.env.example` to the `secretsFile` path rather than
 copying it in place. Two gotchas worth knowing:
 
@@ -337,6 +399,111 @@ copying it in place. Two gotchas worth knowing:
 Everything else has a working default. The plugin's `.env.example` lists the endpoint
 overrides, which exist so the Molecule team can point an agent at another deployment for
 testing; you should not need to touch them.
+
+### Where configuration comes from, in order
+
+The server resolves every variable once, at startup, and the first source to define a key
+wins:
+
+1. **A real environment variable** in the process. Beats everything below it.
+2. **`.env` files**, searched in this order: the plugin's data directory, the plugin folder,
+   the server's own `mcp/` directory, the directory the host was started in, and every parent
+   of all four.
+3. **The `env` block of the nearest `.claude/settings.json` or `settings.local.json`**, found
+   by the same walk. The first `.claude` directory that has an `env` block wins outright and
+   the search stops there. `~/.claude/settings.json` is deliberately skipped — a value there
+   would apply to every project at once.
+
+Nothing in 2 or 3 ever overwrites something already set by a source above it, and no value is
+logged. `config_doctor`'s `configLoadedFrom` names the exact file each variable came from,
+which is the only reliable way to see what actually happened.
+
+> **This is how a test picks up someone else's settings.** A `.env`, or a `.claude/`
+> `env` block, in *any parent directory of the folder you open* is read. If a sibling project
+> higher up the tree sets `MOLECULE_LABS_URL`, `MOLECULE_SERVICE_TOKEN` or `EVM_RPC_URL`, your
+> session silently inherits them and talks to the wrong deployment with the wrong token.
+> Before trusting a clean-environment test, run `config_doctor` and read every path in
+> `configLoadedFrom`. Working from a directory outside the tree that holds those settings is
+> the simplest way to be sure.
+
+### Pointing it at another deployment
+
+The four overrides — `MOLECULE_LABS_URL`, `MOLECULE_CLIENT_URL`, `MOLECULE_CHAIN_ID` and
+`MOLECULE_ACCESS_RESOLVER` — must be set as a **matched set** describing one deployment.
+Mixing them uploads private files that can never be decrypted, because the lock names a
+contract that deployment cannot evaluate.
+
+The awkward part is timing: on a first install the `.env` does not exist yet, because the
+server creates it. Three ways round that, one per host.
+
+**Claude Code** — put them in the `env` block of a `.claude/settings.json` in the folder you
+open. This works on the very first run, before any `.env` exists, and it travels with the
+folder rather than the machine:
+
+```json
+{
+  "env": {
+    "MOLECULE_LABS_URL": "https://…/graphql",
+    "MOLECULE_CLIENT_URL": "https://…",
+    "MOLECULE_CHAIN_ID": "…",
+    "MOLECULE_ACCESS_RESOLVER": "0x…"
+  }
+}
+```
+
+Alternatively, let the plugin run once, ask the agent for `config_doctor`'s `secretsFile`,
+write the four lines into that file, and reconnect with `/mcp`.
+
+**Grok** — register the server yourself with the values attached, which also lets you raise
+the 30-second startup budget the first run needs:
+
+```bash
+grok plugin details molecule-lab-contributor-agent    # prints the install path
+grok mcp add mol-labs -e MOLECULE_LABS_URL=https://…/graphql -e MOLECULE_CHAIN_ID=… \
+  -- <install path>/mcp/launch
+```
+
+**Codex** — the same, on the `codex mcp add` line you already have to run:
+
+```bash
+codex mcp add mol-labs --env MOLECULE_LABS_URL=https://…/graphql \
+  --env MOLECULE_CHAIN_ID=… -- /path/to/installed/plugin/mcp/launch
+```
+
+Because these arrive as real environment variables they outrank every `.env`, which is what
+you want for a deliberate test and *not* what you want permanently — a variable set this way
+silently overrides the file the agent writes. Whichever route you take, confirm it landed:
+`config_doctor` prints the resolved endpoint and the source of every value.
+
+## Removing it, and starting from a clean slate
+
+Uninstalling through the host leaves the plugin's data directory behind on purpose — it holds
+your `.env`, and that file holds the agent's private key. **That key is the identity your Lab
+granted the Contributor role to.** Delete it and the next run generates a different agent that
+has no role, and someone has to grant it again in the Labs app. Copy the file somewhere safe
+before removing anything you cannot get back.
+
+For a genuinely clean test — nothing cached, nothing inherited — remove all six of these.
+Only the first is obvious:
+
+```bash
+claude plugin uninstall molecule-lab-contributor-agent@molecule-lab-contributor-agent-marketplace
+```
+
+1. `~/.claude/plugins/data/<plugin>-<marketplace>/` — the private uv, Python, and your `.env`
+2. `~/.claude/plugins/cache/<marketplace>/` and `~/.claude/plugins/marketplaces/<marketplace>/`
+3. The entries in `~/.claude/plugins/known_marketplaces.json` and `installed_plugins.json`
+4. `enabledPlugins` **and `extraKnownMarketplaces`** in `~/.claude/settings.json` — an entry
+   left in the second one silently re-adds the marketplace on the next session
+5. `~/.claude/skills/molecule-lab-contributor/`, if a copy of `SKILL.md` was ever placed there
+   by hand. A personal skill loads in every session whether the plugin is installed or not,
+   and a stale copy is invisible until it contradicts the plugin's own
+6. Any `.env` or `.claude/` `env` block in the directory you plan to test from, **or in any
+   parent of it** — see the warning above
+
+On Grok, `grok plugin marketplace remove <name>` does 1–3 in one step. On Codex, remember
+`codex mcp remove mol-labs` as well as `codex plugin remove …`, because the server was
+registered separately.
 
 ## Privacy and data
 

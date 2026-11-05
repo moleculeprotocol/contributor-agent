@@ -1,5 +1,7 @@
 # molecule-lab-contributor-agent
 
+**This plugin is retired.** Use [Agent Connect](https://docs.molecule.xyz/ai-tooling/agent-connect) instead; the [repository README](../../README.md) explains why.
+
 The plugin itself. Everything explaining what it does, how to install it, and how to
 configure it lives in the [repository README](../../README.md) one level up, along with the
 Apache-2.0 [LICENSE](../../LICENSE).
